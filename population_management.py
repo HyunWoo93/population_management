@@ -14,7 +14,7 @@ class WindowClass(QMainWindow, form_class) :
         self.member_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.group_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
 
-        # laod file data
+        # load file data
         try:
             self.members_df = pd.read_csv('./members.csv')
             tmp_df = pd.DataFrame({'selection': [False for i in range(self.members_df.shape[0])]})
@@ -30,6 +30,7 @@ class WindowClass(QMainWindow, form_class) :
 
         self.adding_button.clicked.connect(self.add_member)
         self.removing_button.clicked.connect(self.remove_members)
+        self.finding_button.clicked.connect(self.find_member)
         self.deciding_button.clicked.connect(self.decide_attending_members)
         self.reset_button.clicked.connect(self.reset_attending_members)
         self.member_table.cellClicked.connect(self.update_selection)
@@ -46,6 +47,18 @@ class WindowClass(QMainWindow, form_class) :
         idx = self.members_df[self.members_df['selection'] == True].index
         self.members_df = self.members_df.drop(idx).reset_index(drop=True)
         self.update_member_table() 
+
+    def find_member(self) :
+        member_name = self.input_box.text()
+        boolean_idx = self.members_df['name'] == member_name
+        for i, boolean in enumerate(boolean_idx) :
+            if boolean :
+                self.member_table.setCurrentCell(i, 1)
+            else :
+                pass
+            
+        QMessageBox.question(self, 'Message', '찾는 맴버가 없습니다.', QMessageBox.Yes , QMessageBox.Yes)
+
 
     def decide_attending_members(self) :
         
