@@ -1,5 +1,6 @@
 import sys
 from PyQt5.QtWidgets import *
+from PyQt5.QtCore import *
 from PyQt5 import uic
 import numpy as np
 import pandas as pd
@@ -13,6 +14,7 @@ class WindowClass(QMainWindow, form_class) :
         self.setupUi(self)
         self.member_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.group_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.event_loop = QEventLoop()
 
         # load file data
         try:
@@ -49,15 +51,19 @@ class WindowClass(QMainWindow, form_class) :
         self.update_member_table() 
 
     def find_member(self) :
-        member_name = self.input_box.text()
-        boolean_idx = self.members_df['name'] == member_name
-        for i, boolean in enumerate(boolean_idx) :
-            if boolean :
-                self.member_table.setCurrentCell(i, 1)
-            else :
-                pass
-            
-        QMessageBox.question(self, 'Message', '찾는 맴버가 없습니다.', QMessageBox.Yes , QMessageBox.Yes)
+        if self.event_loop.isRunning() :
+            self.event_loop.exit()
+            print(self.event_loop.isRunning)
+        else :
+            member_name = self.input_box.text()
+            boolean_idx = self.members_df['name'] == member_name
+            for i, boolean in enumerate(boolean_idx) :
+                if boolean :
+                    self.member_table.setCurrentCell(i, 1)
+                    self.event_loop.exec()
+                else :
+                    pass 
+            QMessageBox.question(self, 'Message', '찾는 맴버가 없습니다.', QMessageBox.Yes , QMessageBox.Yes)
 
 
     def decide_attending_members(self) :
