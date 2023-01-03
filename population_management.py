@@ -37,6 +37,7 @@ class WindowClass(QMainWindow, form_class) :
         self.reset_button.clicked.connect(self.reset_attending_members)
         self.member_table.cellClicked.connect(self.update_selection)
         self.group_table.cellClicked.connect(self.update_leader)
+        self.group_table.cellDoubleClicked.connect(self.enable_groupEditing)
         self.grouping_button.clicked.connect(self.update_group)
 
 
@@ -53,16 +54,14 @@ class WindowClass(QMainWindow, form_class) :
     def find_member(self) :
         if self.event_loop.isRunning() :
             self.event_loop.exit()
-            print(self.event_loop.isRunning)
         else :
-            member_name = self.input_box.text()
-            boolean_idx = self.members_df['name'] == member_name
-            for i, boolean in enumerate(boolean_idx) :
-                if boolean :
+            finding_name = self.input_box.text()
+            for i, name in enumerate(self.members_df['name'].tolist()) :
+                if finding_name in name :
                     self.member_table.setCurrentCell(i, 1)
                     self.event_loop.exec()
                 else :
-                    pass 
+                    pass
             QMessageBox.question(self, 'Message', '찾는 맴버가 없습니다.', QMessageBox.Yes , QMessageBox.Yes)
 
 
@@ -79,6 +78,7 @@ class WindowClass(QMainWindow, form_class) :
 
             self.update_group_table()
             self.leaders = []
+
         else :
             pass
 
@@ -90,6 +90,7 @@ class WindowClass(QMainWindow, form_class) :
         self.attending_members = self.attending_members[['group', 'ID', 'name', 'sex', 'value', 'selection']]
         self.attending_members.loc[:, 'group'] = 0
         self.attending_members.loc[:, 'selection'] = False
+        self.attending_members.sort_values(by = 'ID', inplace = True)
         self.leaders = []
 
         self.update_group_table()
@@ -125,35 +126,79 @@ class WindowClass(QMainWindow, form_class) :
         else :
             pass
 
-    def update_group(self) :
-        while True in (self.attending_members['group'] == 0).values.tolist() :
-            for idx, ID in enumerate(self.leaders) :
-                index = self.attending_members[self.attending_members['ID'] == ID].index
-                leader_sex = self.attending_members.loc[index,'sex'].values[0]
-                leader_value = self.attending_members.loc[index,'value'].values[0]
+    def enable_groupEditing(self, row, col) :
+        if col == 0 :
+            self.group_table.setEditTriggers(QAbstractItemView.DoubleClicked)
+        else :
+            self.group_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
 
-                tmp_df = self.attending_members[self.attending_members['group'] == 0].set_index('ID')
-                tmp_df['sex'] = tmp_df['sex'] - leader_sex
-                tmp_df['value'] = tmp_df['value'] - leader_value
-                distance = tmp_df['sex']*tmp_df['sex'] + tmp_df['value']*tmp_df['value']
-                try:
-                    selected_ID = distance.sort_values(ascending = False).head(1).index.values[0]
-                    id_idx = self.attending_members[self.attending_members['ID'] == selected_ID].index
-                    self.attending_members.loc[id_idx, 'group'] = idx + 1
-                except :
-                    pass
+    def update_attending_member(self) :
+        
+        # brings group table's group data to attending_members df
+        self.attending_members.set_index('ID', inplace = True)
+        for i in range(self.group_table.rowCount()) :
+            qgroup = self.group_table.item(i, 0).text()
+            qid = self.group_table.item(i, 1).text()
+            self.attending_members.loc[int(qid), 'group'] = int(qgroup)
+
+        self.attending_members.reset_index(inplace = True)
+        self.attending_members = self.attending_members[['group','ID', 'name', 'sex', 'value','selection']]
+
+
+    def update_group(self) :
+
+        self.update_attending_member()        
+
+        # updata groups
+        if self.leaders :
+            while True in (self.attending_members['group'] == 0).values.tolist() :
+                for group_idx, ID in enumerate(self.leaders) :
+                    index = self.attending_members[self.attending_members['ID'] == ID].index
+                    leader_sex = self.attending_members.loc[index,'sex'].values[0]
+                    leader_value = self.attending_members.loc[index,'value'].values[0]
+
+                    tmp_df = self.attending_members[self.attending_members['group'] == 0].set_index('ID')
+                    tmp_df['sex'] = tmp_df['sex'] - leader_sex
+                    tmp_df['value'] = tmp_df['value'] - leader_value
+                    distance = tmp_df['sex']*tmp_df['sex'] + tmp_df['value']*tmp_df['value']
+                    try:
+                        selected_ID = distance.sort_values(ascending = False).head(1).index.values[0]
+                        id_idx = self.attending_members[self.attending_members['ID'] == selected_ID].index
+                        self.attending_members.loc[id_idx, 'group'] = group_idx + 1
+                    except :
+                        pass
+        else :
+            print('No leaders')
                 
         self.update_value()
 
 
-
     def update_value(self) :
+
         for ID in self.leaders :
             leader_idx = self.attending_members[self.attending_members['ID'] == ID].index
             group = self.attending_members.loc[leader_idx, 'group'].values[0]
             group_idx = self.attending_members['group'] == group
             self.attending_members.loc[group_idx, 'value'] = self.attending_members.loc[group_idx, 'value']*(1/4) + self.attending_members.loc[leader_idx, 'value'].values[0]*(3/4)
 
+        # bringing data of attending_members_df to members_df
+        self.tmp_members_df = self.members_df.set_index('ID')
+        self.tmp_members_df.update(self.attending_members.set_index('ID')['value'])
+        self.tmp_members_df.reset_index(inplace = True)
+
+        # sorting by value and reassigning
+        self.tmp_members_df.sort_values(by = 'value', inplace = True)
+        for i, value in enumerate(self.tmp_members_df['value'].tolist()) :
+            self.tmp_members_df['value'].iloc[i] = i
+        self.tmp_members_df.sort_values(by = 'ID', inplace = True)
+
+        # updating attending_member_df
+        self.attending_members.set_index('ID', inplace = True)
+        self.attending_members.update(self.tmp_members_df.set_index('ID')['value'])
+        self.attending_members.reset_index(inplace = True)
+        self.attending_members = self.attending_members[['group','ID', 'name', 'sex', 'value','selection']]
+
+        # showing
         self.attending_members.sort_values(by = ['group', 'selection', 'value', 'sex'], ascending = [True, False, True, True], inplace = True)
         self.update_group_table()
 
@@ -175,11 +220,11 @@ class WindowClass(QMainWindow, form_class) :
                 self.group_table.setItem(i, j,  QTableWidgetItem(str(tmp_df.iloc[i,j])))
 
     def save_members_df(self) :
-        print(self.members_df.iloc[:,:self.members_df.shape[1]-1])
+        #print(self.members_df.iloc[:,:self.members_df.shape[1]-1])
         self.members_df.set_index('ID', inplace = True)
         self.members_df.update(self.attending_members.set_index('ID'))
         self.members_df.reset_index(inplace = True)
-        print(self.members_df.iloc[:,:self.members_df.shape[1]-1])
+        #print(self.members_df.iloc[:,:self.members_df.shape[1]-1])
         self.members_df.iloc[:,:self.members_df.shape[1]-1].to_csv('./members.csv', index = False)
 
     def closeEvent(self, event):
